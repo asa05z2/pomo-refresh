@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#fff9f2">
+  <meta name="description" content="気分に合わせて集中し、罪悪感なく休めるポモドーロタイマー">
+  <title>PomoRefresh — 集中と休憩を、やさしく。</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;600;700&family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="ambient ambient-one" aria-hidden="true"></div>
+  <div class="ambient ambient-two" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="brand" href="#" aria-label="PomoRefresh ホーム">
+      <span class="brand-mark" aria-hidden="true"><span></span></span>
+      <span>PomoRefresh</span>
+    </a>
+    <div class="today-pill" aria-label="今日の記録">
+      <span class="today-label">TODAY</span>
+      <span>集中 <strong id="focus-count">0</strong></span>
+      <i aria-hidden="true"></i>
+      <span>ひと休み <strong id="tired-count">0</strong></span>
+    </div>
+  </header>
+
+  <main>
+    <section id="focus-view" class="view is-active" aria-labelledby="focus-heading">
+      <div class="intro">
+        <p class="eyebrow"><span></span> SMALL STEPS, BIG FOCUS</p>
+        <h1 id="focus-heading">今日の自分に、<br><em>ちょうどいい集中。</em></h1>
+        <p>気分に合わせて時間を選ぼう。<br>休むことも、前に進むことのひとつです。</p>
+      </div>
+
+      <div class="app-card focus-card">
+        <div class="mode-section">
+          <div class="section-heading">
+            <div><span class="step">01</span><h2>集中モードを選ぶ</h2></div>
+            <span id="mode-use" class="mode-use">まずは気軽に</span>
+          </div>
+          <div id="mode-list" class="mode-list" role="radiogroup" aria-label="集中モード"></div>
+        </div>
+
+        <div class="timer-section">
+          <div class="timer-topline">
+            <span><i class="status-dot"></i><span id="timer-status">準備できたらスタート</span></span>
+            <button id="reset-button" class="text-button" type="button">リセット</button>
+          </div>
+          <div id="focus-timer" class="timer-display" aria-live="polite">15:00</div>
+          <div class="timer-progress" aria-hidden="true"><span id="focus-progress"></span></div>
+          <button id="start-button" class="primary-button" type="button">
+            <span id="start-icon" aria-hidden="true">▶</span><span id="start-label">集中をはじめる</span>
+          </button>
+          <button id="tired-button" class="tired-button" type="button" disabled>
+            <span aria-hidden="true">☁</span> ちょっと疲れた
+          </button>
+          <p class="permission">途中で休んでも大丈夫。あなたのペースがいちばん。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="break-view" class="view" aria-labelledby="break-heading">
+      <div class="break-layout">
+        <div class="break-copy">
+          <p class="eyebrow break-eyebrow"><span></span> REFRESH TIME</p>
+          <h1 id="break-heading">いい集中でした。<br><em>今は、休む時間。</em></h1>
+          <p id="break-message">頭と体をゆるめて、次の自分に余白をつくろう。</p>
+          <div class="break-timer-card">
+            <div class="break-orbit" aria-hidden="true"><span>☕</span></div>
+            <div>
+              <span class="break-label">休憩のこり</span>
+              <div id="break-timer" class="break-timer" aria-live="polite">03:00</div>
+            </div>
+            <button id="skip-break" class="skip-button" type="button">休憩を終える →</button>
+          </div>
+        </div>
+
+        <article class="suggestion-card">
+          <div class="suggestion-top">
+            <span id="time-icon" class="time-icon" aria-hidden="true">☀</span>
+            <div><span id="time-label">朝〜昼のおすすめ</span><small id="time-range">5:00 — 11:59</small></div>
+          </div>
+          <div class="suggestion-visual" aria-hidden="true">
+            <div class="visual-sun"></div><div class="visual-cup">◡</div><div class="visual-leaf">⌁</div>
+          </div>
+          <p class="suggestion-kicker">今のあなたへ</p>
+          <h2 id="suggestion-text">軽く背伸びをして<br>深呼吸しよう</h2>
+          <button id="done-suggestion" class="done-button" type="button"><span>✓</span> できた！</button>
+          <button id="next-suggestion" class="next-button" type="button">ほかの提案を見る ↻</button>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer><span>PomoRefresh</span><p>Focus softly. Rest fully.</p><small>音はタイマー終了時にだけ鳴ります</small></footer>
+
+  <div id="complete-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="complete-title" hidden>
+    <div class="confetti" aria-hidden="true"></div>
+    <div class="modal-card">
+      <div class="celebration" aria-hidden="true">✦</div>
+      <p class="eyebrow modal-eyebrow">REFRESH COMPLETE</p>
+      <h2 id="complete-title">やったね！<br>リフレッシュ完了。</h2>
+      <p id="complete-message">しっかり休めたあなた、えらい。<br>また自分のペースで始めよう。</p>
+      <button id="back-home" class="primary-button" type="button">次の集中モードを選ぶ <span>→</span></button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

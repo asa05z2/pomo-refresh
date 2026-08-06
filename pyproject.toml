@@ -1,0 +1,17 @@
+[project]
+name = "pomorefresh"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "A.Takada", email = "a23ninitkd@gmail.com" }
+]
+requires-python = ">=3.11.15"
+dependencies = []
+
+[project.scripts]
+pomorefresh = "pomorefresh:main"
+
+[build-system]
+requires = ["uv_build>=0.12.2,<0.13.0"]
+build-backend = "uv_build"
