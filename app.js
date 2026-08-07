@@ -1,6 +1,7 @@
 "use strict";
 
 const MODES = [
+  { id: "quick", name: "とりあえず3分", detail: "ゲーム感覚でスタート", focus: 3, rest: 1, icon: "⚡" },
   { id: "short", name: "ショート", detail: "まずは気軽に", focus: 15, rest: 3, icon: "✦" },
   { id: "classic", name: "クラシック", detail: "王道のリズム", focus: 25, rest: 5, icon: "●" },
   { id: "long", name: "ロング", detail: "じっくり集中", focus: 50, rest: 10, icon: "◆" },
@@ -14,7 +15,10 @@ const SUGGESTIONS = {
 };
 
 const $ = (selector) => document.querySelector(selector);
+const audioManager = new AudioManager();
 const storedMode = localStorage.getItem("pomorefresh:lastMode");
+const storedFocusSound = localStorage.getItem("pomorefresh:focusSound");
+let focusSound = ["focus2", "birdRiver", "rain"].includes(storedFocusSound) ? storedFocusSound : "focus2";
 let selectedMode = MODES.some((m) => m.id === storedMode) ? storedMode : "short";
 let phase = "focus";
 let running = false;
@@ -23,6 +27,7 @@ let totalSeconds = remaining;
 let endAt = null;
 let ticker = null;
 let suggestionIndex = -1;
+let recommendedModeId = null;
 
 function mode() { return MODES.find((item) => item.id === selectedMode); }
 function formatTime(seconds) { const safe = Math.max(0, Math.ceil(seconds)); return `${String(Math.floor(safe / 60)).padStart(2,"0")}:${String(safe % 60).padStart(2,"0")}`; }
@@ -31,10 +36,38 @@ function stats() { try { const data = JSON.parse(localStorage.getItem("pomorefre
 function updateStats(type) { const data = stats(); data[type] += 1; localStorage.setItem("pomorefresh:stats", JSON.stringify(data)); renderStats(); }
 function renderStats() { const data = stats(); $("#focus-count").textContent = data.focus; $("#tired-count").textContent = data.tired; }
 
+function sessionHistory() {
+  try {
+    const history = JSON.parse(localStorage.getItem("pomorefresh:sessionHistory"));
+    return Array.isArray(history) ? history : [];
+  } catch { return []; }
+}
+function recordSession(outcome) {
+  const focusedSeconds = Math.max(0, totalSeconds - remaining);
+  const history = sessionHistory();
+  history.push({ modeId: selectedMode, plannedMinutes: mode().focus, focusedSeconds, outcome, endedAt: new Date().toISOString() });
+  localStorage.setItem("pomorefresh:sessionHistory", JSON.stringify(history.slice(-20)));
+}
+function getRecommendation(modeId = selectedMode) {
+  return PomoRecommendation.calculateRecommendation(sessionHistory(), MODES, modeId);
+}
+function renderRecommendation() {
+  const recommendation = getRecommendation();
+  const panel = $("#focus-recommendation");
+  recommendedModeId = recommendation?.mode.id || null;
+  if (!recommendation) { panel.hidden = true; return; }
+  $("#recommendation-title").textContent = `${recommendation.mode.focus}分モードが合いそうです`;
+  $("#recommendation-reason").textContent = `最近は${recommendation.sampleSize}回、${recommendation.typicalMinutes}分ほどで休憩しています。`;
+  $("#apply-recommendation").textContent = `${recommendation.mode.name}に切り替える →`;
+  panel.hidden = false;
+}
+
 function renderModes() {
   $("#mode-list").innerHTML = MODES.map((item) => `<button class="mode-button ${item.id === selectedMode ? "is-selected" : ""}" data-mode="${item.id}" type="button" role="radio" aria-checked="${item.id === selectedMode}"><span class="mode-icon" aria-hidden="true">${item.icon}</span><span class="mode-copy"><strong>${item.name}</strong><small>休憩 ${item.rest}分 · ${item.detail}</small></span><span class="mode-time">${item.focus}<small>分</small></span></button>`).join("");
   $("#mode-use").textContent = mode().detail;
   document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => selectMode(button.dataset.mode)));
+  renderRecommendation();
+  renderSoundControls();
 }
 function selectMode(id) {
   if (running || phase !== "focus") return;
@@ -46,9 +79,35 @@ function renderTimer() {
   document.title = running ? `${formatTime(remaining)} · ${phase === "focus" ? "集中中" : "休憩中"} | PomoRefresh` : "PomoRefresh — 集中と休憩を、やさしく。";
   if (phase === "focus") $("#focus-progress").style.width = `${Math.min(100, Math.max(0, (1 - remaining / totalSeconds) * 100))}%`;
 }
+function activeFocusSound() { return selectedMode === "quick" ? "threeMinute" : focusSound; }
+function renderSoundControls() {
+  const activeSound = activeFocusSound();
+  document.querySelectorAll("[data-sound]").forEach((button) => {
+    const selected = button.dataset.sound === activeSound;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", String(selected));
+    button.disabled = selectedMode === "quick";
+  });
+  $("#sound-note").textContent = selectedMode === "quick"
+    ? "3分専用BGMを自動再生"
+    : activeSound === "focus2" ? "集中用BGM" : activeSound === "birdRiver" ? "鳥と川の環境音" : "雨音で静かに集中";
+  $("#volumeControl").value = audioManager.volume;
+  $("#mute-button").classList.toggle("is-muted", audioManager.isMuted);
+  $("#mute-button").setAttribute("aria-pressed", String(audioManager.isMuted));
+  $("#mute-button").textContent = audioManager.isMuted ? "×" : "◖";
+  $("#mute-button").setAttribute("aria-label", audioManager.isMuted ? "ミュートを解除" : "サウンドをミュート");
+}
+function selectFocusSound(sound) {
+  if (selectedMode === "quick" || !["focus2", "birdRiver", "rain"].includes(sound)) return;
+  focusSound = sound; localStorage.setItem("pomorefresh:focusSound", sound); renderSoundControls();
+  if (running && phase === "focus") audioManager.switchSound(activeFocusSound());
+}
 function setRunning(next) {
   running = next; clearInterval(ticker); ticker = null;
-  if (running) { endAt = Date.now() + remaining * 1000; ticker = setInterval(tick, 250); tick(); }
+  if (running) {
+    audioManager.switchSound(activeFocusSound());
+    endAt = Date.now() + remaining * 1000; ticker = setInterval(tick, 250); tick();
+  } else audioManager.stop();
   $("#start-label").textContent = running ? "一時停止" : (remaining < totalSeconds ? "集中をつづける" : "集中をはじめる");
   $("#start-icon").textContent = running ? "Ⅱ" : "▶";
   $("#timer-status").textContent = running ? "集中しています" : (remaining < totalSeconds ? "ひと休み中" : "準備できたらスタート");
@@ -61,15 +120,20 @@ function tick() {
 function toggleFocus() { if (phase !== "focus") return; if (running) { remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000)); setRunning(false); renderTimer(); } else setRunning(true); }
 function resetFocus() { if (phase !== "focus") return; setRunning(false); remaining = mode().focus * 60; totalSeconds = remaining; renderTimer(); }
 function finishPhase() {
-  setRunning(false); playChime();
-  if (phase === "focus") { updateStats("focus"); startBreak(false); } else showComplete();
+  setRunning(false);
+  if (phase === "focus") { recordSession("completed"); updateStats("focus"); startBreak(false); } else showComplete();
 }
 function startBreak(fromTired) {
-  if (fromTired) updateStats("tired");
+  const outcome = PomoRecommendation.classifySessionOutcome(remaining, totalSeconds, fromTired);
+  if (fromTired) { recordSession(outcome); updateStats(outcome === "completed" ? "focus" : "tired"); }
   clearInterval(ticker); phase = "break"; remaining = mode().rest * 60; totalSeconds = remaining;
-  $("#break-message").textContent = fromTired ? "よく限界まで頑張った！ 無理せず休むのが、いちばん効率的です。" : "頭と体をゆるめて、次の自分に余白をつくろう。";
+  $("#break-message").textContent = fromTired && outcome === "completed"
+    ? "ほとんど最後まで集中できました！ ここからは、しっかり休もう。"
+    : fromTired
+      ? "よく限界まで頑張った！ 無理せず休むのが、いちばん効率的です。"
+      : "頭と体をゆるめて、次の自分に余白をつくろう。";
   $("#focus-view").classList.remove("is-active"); $("#break-view").classList.add("is-active");
-  chooseSuggestion(true); renderTimer(); running = true; endAt = Date.now() + remaining * 1000; ticker = setInterval(tick,250); tick(); window.scrollTo({top:0,behavior:"smooth"});
+  chooseSuggestion(true); renderTimer(); running = true; audioManager.switchSound("relax"); endAt = Date.now() + remaining * 1000; ticker = setInterval(tick,250); tick(); window.scrollTo({top:0,behavior:"smooth"});
 }
 function timePeriod() { const hour = new Date().getHours(); return hour >= 5 && hour < 12 ? "morning" : hour >= 12 && hour < 18 ? "afternoon" : "night"; }
 function chooseSuggestion(first = false) {
@@ -79,15 +143,11 @@ function chooseSuggestion(first = false) {
   $("#suggestion-text").textContent = group.items[suggestionIndex]; $("#done-suggestion").classList.remove("is-done"); $("#done-suggestion").innerHTML = "<span>✓</span> できた！";
 }
 function completeSuggestion() { const button = $("#done-suggestion"); button.classList.add("is-done"); button.innerHTML = "<span>✓</span> できました！"; }
-function showComplete() { clearInterval(ticker); running = false; remaining = 0; renderTimer(); $("#complete-modal").hidden = false; $("#back-home").focus(); }
+function showComplete() { clearInterval(ticker); running = false; remaining = 0; audioManager.stop(); renderTimer(); $("#complete-modal").hidden = false; $("#back-home").focus(); }
 function returnHome() {
   $("#complete-modal").hidden = true; $("#break-view").classList.remove("is-active"); $("#focus-view").classList.add("is-active");
   phase = "focus"; remaining = mode().focus * 60; totalSeconds = remaining; setRunning(false); renderModes(); renderTimer(); window.scrollTo({top:0,behavior:"smooth"});
 }
-function playChime() {
-  try { const context = new (window.AudioContext || window.webkitAudioContext)(); const now = context.currentTime; [523.25,659.25,783.99].forEach((frequency,index) => { const oscillator = context.createOscillator(); const gain = context.createGain(); oscillator.type = "sine"; oscillator.frequency.value = frequency; gain.gain.setValueAtTime(0,now+index*.15); gain.gain.linearRampToValueAtTime(.12,now+index*.15+.02); gain.gain.exponentialRampToValueAtTime(.001,now+index*.15+.5); oscillator.connect(gain).connect(context.destination); oscillator.start(now+index*.15); oscillator.stop(now+index*.15+.55); }); } catch { /* Audio is an optional enhancement. */ }
-}
-
 $("#start-button").addEventListener("click", toggleFocus);
 $("#reset-button").addEventListener("click", resetFocus);
 $("#tired-button").addEventListener("click", () => startBreak(true));
@@ -95,6 +155,11 @@ $("#skip-break").addEventListener("click", showComplete);
 $("#done-suggestion").addEventListener("click", completeSuggestion);
 $("#next-suggestion").addEventListener("click", () => chooseSuggestion(false));
 $("#back-home").addEventListener("click", returnHome);
+$("#apply-recommendation").addEventListener("click", () => { if (recommendedModeId) selectMode(recommendedModeId); });
+document.querySelectorAll("[data-sound]").forEach((button) => button.addEventListener("click", () => selectFocusSound(button.dataset.sound)));
+$("#volumeControl").addEventListener("input", (event) => audioManager.setVolume(event.target.value));
+$("#mute-button").addEventListener("click", () => { audioManager.setMuted(!audioManager.isMuted); renderSoundControls(); });
 document.addEventListener("visibilitychange", () => { if (running) tick(); });
+window.addEventListener("pagehide", () => audioManager.stop(0.05));
 
 renderModes(); renderStats(); renderTimer();

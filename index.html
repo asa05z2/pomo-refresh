@@ -42,6 +42,15 @@
             <div><span class="step">01</span><h2>集中モードを選ぶ</h2></div>
             <span id="mode-use" class="mode-use">まずは気軽に</span>
           </div>
+          <aside id="focus-recommendation" class="focus-recommendation" aria-live="polite" hidden>
+            <span class="recommendation-icon" aria-hidden="true">✦</span>
+            <div>
+              <span class="recommendation-label">あなたへのおすすめ</span>
+              <strong id="recommendation-title"></strong>
+              <p id="recommendation-reason"></p>
+            </div>
+            <button id="apply-recommendation" type="button"></button>
+          </aside>
           <div id="mode-list" class="mode-list" role="radiogroup" aria-label="集中モード"></div>
         </div>
 
@@ -52,6 +61,18 @@
           </div>
           <div id="focus-timer" class="timer-display" aria-live="polite">15:00</div>
           <div class="timer-progress" aria-hidden="true"><span id="focus-progress"></span></div>
+          <div class="sound-panel" aria-label="サウンド設定">
+            <div class="sound-heading"><span>集中サウンド</span><small id="sound-note">雨音で静かに集中</small></div>
+            <div class="sound-options" role="radiogroup" aria-label="集中中のサウンド">
+              <button class="sound-option is-selected" data-sound="focus2" type="button" role="radio" aria-checked="true"><span>♫</span> 集中BGM</button>
+              <button class="sound-option" data-sound="birdRiver" type="button" role="radio" aria-checked="false"><span>♩</span> 鳥と川</button>
+              <button class="sound-option" data-sound="rain" type="button" role="radio" aria-checked="false"><span>☂</span> 雨音</button>
+            </div>
+            <div class="volume-row">
+              <button id="mute-button" class="mute-button" type="button" aria-pressed="false" aria-label="サウンドをミュート">◖</button>
+              <input type="range" id="volumeControl" min="0" max="1" step="0.01" value="0.35" aria-label="音量">
+            </div>
+          </div>
           <button id="start-button" class="primary-button" type="button">
             <span id="start-icon" aria-hidden="true">▶</span><span id="start-label">集中をはじめる</span>
           </button>
@@ -96,7 +117,7 @@
     </section>
   </main>
 
-  <footer><span>PomoRefresh</span><p>Focus softly. Rest fully.</p><small>音はタイマー終了時にだけ鳴ります</small></footer>
+  <footer><span>PomoRefresh</span><p>Focus softly. Rest fully.</p><small>音量はいつでも調整できます</small></footer>
 
   <div id="complete-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="complete-title" hidden>
     <div class="confetti" aria-hidden="true"></div>
@@ -109,6 +130,8 @@
     </div>
   </div>
 
+  <script src="recommendation.js"></script>
+  <script src="audio-manager.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
