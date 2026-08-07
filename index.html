@@ -36,6 +36,16 @@
         <p>気分に合わせて時間を選ぼう。<br>休むことも、前に進むことのひとつです。</p>
       </div>
 
+      <aside class="plant-card" aria-labelledby="plant-title">
+        <div id="plant-visual" class="plant-visual" aria-hidden="true">🌰</div>
+        <div class="plant-info">
+          <div class="plant-heading"><div><span>MY LITTLE PLANT</span><h2 id="plant-title">種から育てよう</h2></div><strong id="plant-stage">STAGE 1</strong></div>
+          <div class="plant-meter-row"><span>成長</span><div class="plant-meter"><i id="growth-meter"></i></div><small id="growth-value">0 / 3 pt</small></div>
+          <div class="plant-meter-row"><span>土の潤い</span><div class="plant-meter moisture"><i id="moisture-meter"></i></div><small id="moisture-value">70% · ちょうどいい</small></div>
+        </div>
+        <button id="water-plant" class="water-button" type="button"><span aria-hidden="true">💧</span><strong>水やり</strong><small>のこり <b id="water-points">0</b></small></button>
+      </aside>
+
       <div class="app-card focus-card">
         <div class="mode-section">
           <div class="section-heading">
@@ -131,6 +141,7 @@
   </div>
 
   <script src="recommendation.js"></script>
+  <script src="plant-manager.js"></script>
   <script src="audio-manager.js"></script>
   <script src="app.js"></script>
 </body>

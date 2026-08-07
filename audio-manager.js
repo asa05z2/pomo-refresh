@@ -6,6 +6,7 @@ class AudioManager {
     this.trackVolume = { threeMinute: 0.6 };
     this.currentAudio = null;
     this.currentTrack = null;
+    this.completionCtx = null;
     this.fadeTimers = new Set();
     this.isPlaying = false;
     this.volume = this.readNumber("pomorefresh:volume", 0.35);
@@ -83,6 +84,34 @@ class AudioManager {
     const audio = this.currentAudio;
     this.currentAudio = null; this.currentTrack = null; this.isPlaying = false;
     this.fade(audio, audio.volume, 0, duration, () => this.disposeAudio(audio));
+  }
+
+  initCompletionAudio() {
+    if (!this.completionCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return false;
+      this.completionCtx = new AudioContextClass();
+    }
+    if (this.completionCtx.state === "suspended") this.completionCtx.resume();
+    return true;
+  }
+
+  playCompletionSound() {
+    if (this.isMuted || !this.initCompletionAudio()) return;
+    const now = this.completionCtx.currentTime;
+    [523.25, 659.25, 783.99, 1046.5].forEach((frequency, index) => {
+      const oscillator = this.completionCtx.createOscillator();
+      const gain = this.completionCtx.createGain();
+      const start = now + index * 0.13;
+      oscillator.type = index === 3 ? "triangle" : "sine";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, this.volume * 0.45), start + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.55);
+      oscillator.connect(gain).connect(this.completionCtx.destination);
+      oscillator.start(start); oscillator.stop(start + 0.58);
+      oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+    });
   }
 }
 

@@ -15,6 +15,7 @@ const SUGGESTIONS = {
 };
 
 const $ = (selector) => document.querySelector(selector);
+const plantManager = new PlantManager();
 const audioManager = new AudioManager();
 const storedMode = localStorage.getItem("pomorefresh:lastMode");
 const storedFocusSound = localStorage.getItem("pomorefresh:focusSound");
@@ -28,6 +29,15 @@ let endAt = null;
 let ticker = null;
 let suggestionIndex = -1;
 let recommendedModeId = null;
+let breakRewarded = false;
+
+const PLANT_STAGES = [
+  { icon: "🌰", name: "種から育てよう" },
+  { icon: "🌱", name: "小さな芽が出た" },
+  { icon: "🌿", name: "葉っぱが育った" },
+  { icon: "🌷", name: "つぼみがついた" },
+  { icon: "🌸", name: "きれいに開花！" }
+];
 
 function mode() { return MODES.find((item) => item.id === selectedMode); }
 function formatTime(seconds) { const safe = Math.max(0, Math.ceil(seconds)); return `${String(Math.floor(safe / 60)).padStart(2,"0")}:${String(safe % 60).padStart(2,"0")}`; }
@@ -35,6 +45,21 @@ function todayKey() { const now = new Date(); return `${now.getFullYear()}-${Str
 function stats() { try { const data = JSON.parse(localStorage.getItem("pomorefresh:stats")); return data?.date === todayKey() ? data : { date: todayKey(), focus: 0, tired: 0 }; } catch { return { date: todayKey(), focus: 0, tired: 0 }; } }
 function updateStats(type) { const data = stats(); data[type] += 1; localStorage.setItem("pomorefresh:stats", JSON.stringify(data)); renderStats(); }
 function renderStats() { const data = stats(); $("#focus-count").textContent = data.focus; $("#tired-count").textContent = data.tired; }
+function renderPlant() {
+  const state = plantManager.state;
+  const stage = PLANT_STAGES[state.plantStage - 1];
+  const growth = plantManager.growthProgress();
+  const moisture = plantManager.moistureStatus();
+  $("#plant-visual").textContent = stage.icon;
+  $("#plant-title").textContent = stage.name;
+  $("#plant-stage").textContent = `STAGE ${state.plantStage}`;
+  $("#growth-meter").style.width = `${Math.min(100, Math.max(0, growth.value))}%`;
+  $("#growth-value").textContent = growth.next === null ? `${growth.current} pt · MAX` : `${growth.current} / ${growth.next} pt`;
+  $("#moisture-meter").style.width = `${state.moisture}%`;
+  $("#moisture-value").textContent = `${Math.round(state.moisture)}% · ${moisture.label}`;
+  $("#water-points").textContent = state.waterPt;
+  $("#water-plant").disabled = state.waterPt < 1 || state.moisture >= 100;
+}
 
 function sessionHistory() {
   try {
@@ -105,7 +130,7 @@ function selectFocusSound(sound) {
 function setRunning(next) {
   running = next; clearInterval(ticker); ticker = null;
   if (running) {
-    audioManager.switchSound(activeFocusSound());
+    audioManager.initCompletionAudio(); audioManager.switchSound(activeFocusSound());
     endAt = Date.now() + remaining * 1000; ticker = setInterval(tick, 250); tick();
   } else audioManager.stop();
   $("#start-label").textContent = running ? "一時停止" : (remaining < totalSeconds ? "集中をつづける" : "集中をはじめる");
@@ -121,12 +146,21 @@ function toggleFocus() { if (phase !== "focus") return; if (running) { remaining
 function resetFocus() { if (phase !== "focus") return; setRunning(false); remaining = mode().focus * 60; totalSeconds = remaining; renderTimer(); }
 function finishPhase() {
   setRunning(false);
-  if (phase === "focus") { recordSession("completed"); updateStats("focus"); startBreak(false); } else showComplete();
+  if (phase === "focus") {
+    plantManager.rewardFocus(totalSeconds / 60); renderPlant();
+    recordSession("completed"); updateStats("focus"); startBreak(false);
+  } else showComplete();
 }
 function startBreak(fromTired) {
   const outcome = PomoRecommendation.classifySessionOutcome(remaining, totalSeconds, fromTired);
-  if (fromTired) { recordSession(outcome); updateStats(outcome === "completed" ? "focus" : "tired"); }
+  if (fromTired) {
+    const focusedMinutes = Math.max(0, totalSeconds - remaining) / 60;
+    if (outcome === "completed") plantManager.rewardFocus(focusedMinutes);
+    plantManager.earnWater(1); renderPlant();
+    recordSession(outcome); updateStats(outcome === "completed" ? "focus" : "tired");
+  }
   clearInterval(ticker); phase = "break"; remaining = mode().rest * 60; totalSeconds = remaining;
+  breakRewarded = false;
   $("#break-message").textContent = fromTired && outcome === "completed"
     ? "ほとんど最後まで集中できました！ ここからは、しっかり休もう。"
     : fromTired
@@ -143,7 +177,15 @@ function chooseSuggestion(first = false) {
   $("#suggestion-text").textContent = group.items[suggestionIndex]; $("#done-suggestion").classList.remove("is-done"); $("#done-suggestion").innerHTML = "<span>✓</span> できた！";
 }
 function completeSuggestion() { const button = $("#done-suggestion"); button.classList.add("is-done"); button.innerHTML = "<span>✓</span> できました！"; }
-function showComplete() { clearInterval(ticker); running = false; remaining = 0; audioManager.stop(); renderTimer(); $("#complete-modal").hidden = false; $("#back-home").focus(); }
+function showComplete() {
+  clearInterval(ticker); running = false;
+  if (phase === "break" && !breakRewarded) {
+    const restedMinutes = Math.floor(Math.max(0, totalSeconds - remaining) / 60);
+    plantManager.earnWater(restedMinutes); breakRewarded = true; renderPlant();
+  }
+  remaining = 0; audioManager.stop(); audioManager.playCompletionSound(); renderTimer();
+  $("#complete-modal").hidden = false; $("#back-home").focus();
+}
 function returnHome() {
   $("#complete-modal").hidden = true; $("#break-view").classList.remove("is-active"); $("#focus-view").classList.add("is-active");
   phase = "focus"; remaining = mode().focus * 60; totalSeconds = remaining; setRunning(false); renderModes(); renderTimer(); window.scrollTo({top:0,behavior:"smooth"});
@@ -159,7 +201,8 @@ $("#apply-recommendation").addEventListener("click", () => { if (recommendedMode
 document.querySelectorAll("[data-sound]").forEach((button) => button.addEventListener("click", () => selectFocusSound(button.dataset.sound)));
 $("#volumeControl").addEventListener("input", (event) => audioManager.setVolume(event.target.value));
 $("#mute-button").addEventListener("click", () => { audioManager.setMuted(!audioManager.isMuted); renderSoundControls(); });
+$("#water-plant").addEventListener("click", () => { plantManager.water(); renderPlant(); });
 document.addEventListener("visibilitychange", () => { if (running) tick(); });
 window.addEventListener("pagehide", () => audioManager.stop(0.05));
 
-renderModes(); renderStats(); renderTimer();
+renderModes(); renderStats(); renderPlant(); renderTimer();

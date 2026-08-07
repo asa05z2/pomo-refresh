@@ -17,6 +17,27 @@ class AudioMock {
   load() {}
 }
 
+class AudioParamMock {
+  constructor() { this.value = 0; }
+  setValueAtTime(value) { this.value = value; }
+  exponentialRampToValueAtTime(value) { this.value = value; }
+}
+
+class AudioNodeMock {
+  constructor() { this.frequency = new AudioParamMock(); this.gain = new AudioParamMock(); this.started = false; this.stopped = false; }
+  connect(destination) { return destination; }
+  disconnect() {}
+  start() { this.started = true; }
+  stop() { this.stopped = true; }
+}
+
+class AudioContextMock {
+  constructor() { this.state = "suspended"; this.currentTime = 1; this.destination = new AudioNodeMock(); this.oscillators = []; }
+  resume() { this.state = "running"; return Promise.resolve(); }
+  createOscillator() { const node = new AudioNodeMock(); this.oscillators.push(node); return node; }
+  createGain() { return new AudioNodeMock(); }
+}
+
 function installBrowserMocks(values = {}) {
   const storage = new Map(Object.entries(values));
   global.localStorage = {
@@ -25,6 +46,7 @@ function installBrowserMocks(values = {}) {
   };
   AudioMock.instances = [];
   global.Audio = AudioMock;
+  global.window = { AudioContext: AudioContextMock };
   return storage;
 }
 
@@ -115,4 +137,23 @@ test("停止時に音源を一時停止してsrcを解放する", () => {
   assert.equal(manager.isPlaying, false);
   assert.equal(audio.paused, true);
   assert.equal(audio.removedSource, true);
+});
+
+test("リフレッシュ完了時にWeb Audio APIで4音のチャイムを生成する", () => {
+  installBrowserMocks();
+  const manager = new AudioManager();
+  assert.equal(manager.completionCtx, null);
+  manager.initCompletionAudio();
+  manager.playCompletionSound();
+  assert.equal(manager.completionCtx.state, "running");
+  assert.equal(manager.completionCtx.oscillators.length, 4);
+  assert.ok(manager.completionCtx.oscillators.every((node) => node.started && node.stopped));
+});
+
+test("ミュート中はリフレッシュ完了音を再生しない", () => {
+  installBrowserMocks({ "pomorefresh:muted": "true" });
+  const manager = new AudioManager();
+  manager.initCompletionAudio();
+  manager.playCompletionSound();
+  assert.equal(manager.completionCtx.oscillators.length, 0);
 });
