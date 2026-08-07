@@ -9,12 +9,14 @@ class AudioMock {
   constructor(src) {
     this.src = src; this.loop = false; this.preload = ""; this.muted = false;
     this.volume = 1; this.paused = true; this.removedSource = false;
+    this.duration = 120; this.currentTime = 0; this.readyState = 1; this.listeners = {};
     AudioMock.instances.push(this);
   }
   play() { this.paused = false; return Promise.resolve(); }
   pause() { this.paused = true; }
   removeAttribute(name) { if (name === "src") { this.src = ""; this.removedSource = true; } }
   load() {}
+  addEventListener(name, listener) { this.listeners[name] = listener; }
 }
 
 class AudioParamMock {
@@ -69,15 +71,30 @@ test("未設定時は音量35%・ミュート解除を使用する", () => {
   assert.equal(manager.isMuted, false);
 });
 
-test("MP3をループ設定で再生する", () => {
+test("MP3をシームレスループ用の単発プレイヤーで再生する", () => {
   installBrowserMocks();
   const manager = new AudioManager();
   manager.switchSound("threeMinute", 0);
   assert.equal(manager.currentAudio.src, "3min.mp3");
-  assert.equal(manager.currentAudio.loop, true);
+  assert.equal(manager.currentAudio.loop, false);
   assert.equal(manager.currentAudio.preload, "auto");
   assert.equal(manager.currentAudio.paused, false);
   assert.equal(manager.currentAudio.volume, 0.21);
+  manager.stop(0);
+});
+
+test("曲末で次のプレイヤーへクロスフェードする", async () => {
+  installBrowserMocks();
+  const manager = new AudioManager();
+  manager.switchSound("rain", 0);
+  const first = manager.currentAudio;
+  manager.crossfadeLoop(first, "rain");
+  const second = manager.currentAudio;
+  assert.notEqual(second, first);
+  assert.equal(second.src, "rain.mp3");
+  assert.equal(second.paused, false);
+  await new Promise((resolve) => setTimeout(resolve, 650));
+  assert.equal(first.removedSource, true);
   manager.stop(0);
 });
 

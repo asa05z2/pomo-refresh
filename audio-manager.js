@@ -6,6 +6,9 @@ class AudioManager {
     this.trackVolume = { threeMinute: 0.6 };
     this.currentAudio = null;
     this.currentTrack = null;
+    this.loopTimer = null;
+    this.loopOverlap = 0.6;
+    this.activeAudios = new Set();
     this.completionCtx = null;
     this.fadeTimers = new Set();
     this.isPlaying = false;
@@ -23,28 +26,57 @@ class AudioManager {
   createAudio(track) {
     if (!this.tracks[track]) return null;
     const audio = new Audio(this.tracks[track]);
-    audio.loop = true; audio.preload = "auto"; audio.muted = this.isMuted; audio.volume = 0;
+    audio.loop = false; audio.preload = "auto"; audio.muted = this.isMuted; audio.volume = 0;
+    this.activeAudios.add(audio);
     return audio;
   }
 
   switchSound(track, duration = 1.4) {
     if (!this.tracks[track]) { this.stop(duration); return; }
     if (this.currentAudio && this.currentTrack === track) {
-      if (this.currentAudio.paused) this.safePlay(this.currentAudio);
+      if (this.currentAudio.paused) { this.safePlay(this.currentAudio); this.scheduleSeamlessLoop(this.currentAudio, track); }
       this.fade(this.currentAudio, this.currentAudio.volume, this.targetVolume(track), duration);
       this.isPlaying = true;
       return;
     }
+    this.clearLoopTimer();
     const previous = this.currentAudio;
     const next = this.createAudio(track);
     this.currentAudio = next; this.currentTrack = track; this.isPlaying = true;
-    this.safePlay(next); this.fade(next, 0, this.targetVolume(track), duration);
+    this.safePlay(next); this.fade(next, 0, this.targetVolume(track), duration); this.scheduleSeamlessLoop(next, track);
     if (previous) this.fade(previous, previous.volume, 0, duration, () => this.disposeAudio(previous));
   }
 
   safePlay(audio) {
     const request = audio.play();
     if (request && typeof request.catch === "function") request.catch(() => { if (audio === this.currentAudio) this.isPlaying = false; });
+  }
+
+  scheduleSeamlessLoop(audio, track) {
+    const schedule = () => {
+      if (audio !== this.currentAudio || track !== this.currentTrack || !Number.isFinite(audio.duration)) return;
+      this.clearLoopTimer();
+      const waitSeconds = Math.max(0.05, audio.duration - audio.currentTime - this.loopOverlap);
+      this.loopTimer = setTimeout(() => this.crossfadeLoop(audio, track), waitSeconds * 1000);
+      if (typeof this.loopTimer.unref === "function") this.loopTimer.unref();
+    };
+    if (audio.readyState >= 1) schedule();
+    else audio.addEventListener("loadedmetadata", schedule, { once: true });
+  }
+
+  crossfadeLoop(previous, track) {
+    if (previous !== this.currentAudio || track !== this.currentTrack || previous.paused) return;
+    const next = this.createAudio(track);
+    this.currentAudio = next;
+    this.safePlay(next);
+    this.fade(next, 0, this.targetVolume(track), this.loopOverlap);
+    this.fade(previous, previous.volume, 0, this.loopOverlap, () => this.disposeAudio(previous));
+    this.scheduleSeamlessLoop(next, track);
+  }
+
+  clearLoopTimer() {
+    if (this.loopTimer) clearTimeout(this.loopTimer);
+    this.loopTimer = null;
   }
 
   fade(audio, from, to, duration, onComplete) {
@@ -64,7 +96,7 @@ class AudioManager {
   targetVolume(track = this.currentTrack) { return this.clampVolume(this.volume * (this.trackVolume[track] || 1)); }
 
   disposeAudio(audio) {
-    audio.pause(); audio.removeAttribute("src"); audio.load();
+    audio.pause(); audio.removeAttribute("src"); audio.load(); this.activeAudios.delete(audio);
   }
 
   setVolume(value) {
@@ -76,11 +108,12 @@ class AudioManager {
   setMuted(muted) {
     this.isMuted = Boolean(muted);
     localStorage.setItem("pomorefresh:muted", String(this.isMuted));
-    if (this.currentAudio) this.currentAudio.muted = this.isMuted;
+    this.activeAudios.forEach((audio) => { audio.muted = this.isMuted; });
   }
 
   stop(duration = 1.2) {
     if (!this.currentAudio) return;
+    this.clearLoopTimer();
     const audio = this.currentAudio;
     this.currentAudio = null; this.currentTrack = null; this.isPlaying = false;
     this.fade(audio, audio.volume, 0, duration, () => this.disposeAudio(audio));
