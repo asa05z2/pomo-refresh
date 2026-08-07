@@ -52,7 +52,7 @@ function installBrowserMocks(values = {}) {
   return storage;
 }
 
-test("指定された5つのMP3をトラックへ割り当てる", () => {
+test("集中・休憩用のMP3をトラックへ割り当てる", () => {
   installBrowserMocks();
   const manager = new AudioManager();
   assert.deepEqual(manager.tracks, {
@@ -60,6 +60,11 @@ test("指定された5つのMP3をトラックへ割り当てる", () => {
     focus2: "focus2.mp3",
     birdRiver: "bird_river.mp3",
     rain: "rain.mp3",
+    creek: "creek.mp3",
+    campfire: "campfire.mp3",
+    cafe: "cafe.mp3",
+    ukulele: "ukulele.mp3",
+    acousticGuitar: "acoustic_guitar.mp3",
     relax: "relax.mp3"
   });
 });

@@ -1,3 +1,5 @@
+.sound-options { grid-template-columns: repeat(4, 1fr) !important; }
+
 :root {
   --ink: #26392f; --muted: #728078; --cream: #fffaf2; --paper: #fffefa;
   --coral: #ee745f; --coral-dark: #d85f4d; --peach: #f7c6af; --mint: #bad8c5;

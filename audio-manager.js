@@ -2,7 +2,11 @@
 
 class AudioManager {
   constructor() {
-    this.tracks = { threeMinute: "3min.mp3", focus2: "focus2.mp3", birdRiver: "bird_river.mp3", rain: "rain.mp3", relax: "relax.mp3" };
+    this.tracks = {
+      threeMinute: "3min.mp3", focus2: "focus2.mp3", birdRiver: "bird_river.mp3", rain: "rain.mp3",
+      creek: "creek.mp3", campfire: "campfire.mp3", cafe: "cafe.mp3", ukulele: "ukulele.mp3",
+      acousticGuitar: "acoustic_guitar.mp3", relax: "relax.mp3"
+    };
     this.trackVolume = { threeMinute: 0.6 };
     this.currentAudio = null;
     this.currentTrack = null;

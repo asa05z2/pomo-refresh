@@ -14,12 +14,24 @@ const SUGGESTIONS = {
   night: { label: "夜のおすすめ", range: "18:00 — 4:59", icon: "☾", items: ["目を閉じて温かい手で覆おう","部屋の明かりを少し落とそう","深呼吸をして首をストレッチしよう","画面から目を離して遠くを眺めよう","肩の力を抜いてゆっくり3回呼吸しよう","こめかみをやさしく円を描くようにほぐそう","温かい飲み物をひと口飲もう","手のひらと指をゆっくりほぐそう","背中を丸めてからゆっくり伸ばそう","今日できたことを1つ思い出そう"] }
 };
 
+const FOCUS_SOUNDS = [
+  { id: "focus2", label: "集中BGM", icon: "♫", note: "集中用BGM" },
+  { id: "birdRiver", label: "鳥と川", icon: "♩", note: "鳥と川の環境音" },
+  { id: "rain", label: "雨音", icon: "☂", note: "雨音で静かに集中" },
+  { id: "creek", label: "せせらぎ", icon: "≋", note: "川のせせらぎで穏やかに集中" },
+  { id: "campfire", label: "焚き火", icon: "♨", note: "焚き火の揺らぎで落ち着いて集中" },
+  { id: "cafe", label: "カフェ", icon: "☕", note: "静かなカフェのざわめき" },
+  { id: "ukulele", label: "ウクレレ", icon: "♪", note: "軽やかなウクレレで作業" },
+  { id: "acousticGuitar", label: "ギター", icon: "♬", note: "穏やかなアコースティックギター" }
+];
+const FOCUS_SOUND_IDS = FOCUS_SOUNDS.map((sound) => sound.id);
+
 const $ = (selector) => document.querySelector(selector);
 const plantManager = new PlantManager();
 const audioManager = new AudioManager();
 const storedMode = localStorage.getItem("pomorefresh:lastMode");
 const storedFocusSound = localStorage.getItem("pomorefresh:focusSound");
-let focusSound = ["focus2", "birdRiver", "rain"].includes(storedFocusSound) ? storedFocusSound : "focus2";
+let focusSound = FOCUS_SOUND_IDS.includes(storedFocusSound) ? storedFocusSound : "focus2";
 let selectedMode = MODES.some((m) => m.id === storedMode) ? storedMode : "short";
 let phase = "focus";
 let running = false;
@@ -107,15 +119,18 @@ function renderTimer() {
 function activeFocusSound() { return selectedMode === "quick" ? "threeMinute" : focusSound; }
 function renderSoundControls() {
   const activeSound = activeFocusSound();
+  $("#sound-options").innerHTML = FOCUS_SOUNDS.map((sound) => `<button class="sound-option ${sound.id === activeSound ? "is-selected" : ""}" data-sound="${sound.id}" type="button" role="radio" aria-checked="${sound.id === activeSound}" ${selectedMode === "quick" ? "disabled" : ""}><span>${sound.icon}</span> ${sound.label}</button>`).join("");
   document.querySelectorAll("[data-sound]").forEach((button) => {
     const selected = button.dataset.sound === activeSound;
     button.classList.toggle("is-selected", selected);
     button.setAttribute("aria-checked", String(selected));
     button.disabled = selectedMode === "quick";
+    button.addEventListener("click", () => selectFocusSound(button.dataset.sound));
   });
+  const selectedSound = FOCUS_SOUNDS.find((sound) => sound.id === activeSound);
   $("#sound-note").textContent = selectedMode === "quick"
     ? "3分専用BGMを自動再生"
-    : activeSound === "focus2" ? "集中用BGM" : activeSound === "birdRiver" ? "鳥と川の環境音" : "雨音で静かに集中";
+    : selectedSound?.note || "集中用BGM";
   $("#volumeControl").value = audioManager.volume;
   $("#mute-button").classList.toggle("is-muted", audioManager.isMuted);
   $("#mute-button").setAttribute("aria-pressed", String(audioManager.isMuted));
@@ -123,7 +138,7 @@ function renderSoundControls() {
   $("#mute-button").setAttribute("aria-label", audioManager.isMuted ? "ミュートを解除" : "サウンドをミュート");
 }
 function selectFocusSound(sound) {
-  if (selectedMode === "quick" || !["focus2", "birdRiver", "rain"].includes(sound)) return;
+  if (selectedMode === "quick" || !FOCUS_SOUND_IDS.includes(sound)) return;
   focusSound = sound; localStorage.setItem("pomorefresh:focusSound", sound); renderSoundControls();
   if (running && phase === "focus") audioManager.switchSound(activeFocusSound());
 }
@@ -198,7 +213,6 @@ $("#done-suggestion").addEventListener("click", completeSuggestion);
 $("#next-suggestion").addEventListener("click", () => chooseSuggestion(false));
 $("#back-home").addEventListener("click", returnHome);
 $("#apply-recommendation").addEventListener("click", () => { if (recommendedModeId) selectMode(recommendedModeId); });
-document.querySelectorAll("[data-sound]").forEach((button) => button.addEventListener("click", () => selectFocusSound(button.dataset.sound)));
 $("#volumeControl").addEventListener("input", (event) => audioManager.setVolume(event.target.value));
 $("#mute-button").addEventListener("click", () => { audioManager.setMuted(!audioManager.isMuted); renderSoundControls(); });
 $("#water-plant").addEventListener("click", () => { plantManager.water(); renderPlant(); });
