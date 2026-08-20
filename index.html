@@ -20,12 +20,12 @@
       <span class="brand-mark" aria-hidden="true"><span></span></span>
       <span>PomoRefresh</span>
     </a>
-    <div class="today-pill" aria-label="今日の記録">
+    <button id="open-insights" class="today-pill" type="button" aria-label="今日の記録と7日間の振り返りを開く">
       <span class="today-label">TODAY</span>
       <span>集中 <strong id="focus-count">0</strong></span>
       <i aria-hidden="true"></i>
       <span>ひと休み <strong id="tired-count">0</strong></span>
-    </div>
+    </button>
   </header>
 
   <main>
@@ -45,6 +45,25 @@
         </div>
         <button id="water-plant" class="water-button" type="button"><span aria-hidden="true">💧</span><strong>水やり</strong><small>のこり <b id="water-points">0</b></small></button>
       </aside>
+
+      <section class="task-card" aria-labelledby="task-title">
+        <div class="task-card-heading">
+          <div><span>THIS SESSION</span><h2 id="task-title">今回やること</h2></div>
+          <button id="toggle-task-form" class="small-button" type="button">＋ タスクを追加</button>
+        </div>
+        <form id="task-form" class="task-form" hidden>
+          <input id="task-name" type="text" maxlength="40" placeholder="例：資料を3ページ読む" aria-label="タスク名">
+          <select id="task-priority" aria-label="優先順位"><option value="A">A・優先</option><option value="B" selected>B・通常</option><option value="C">C・あとで</option></select>
+          <button type="submit">追加</button>
+        </form>
+        <div class="task-picker-row">
+          <span class="task-list-caption">タスク名を押して今回やることを選択</span>
+          <select id="task-picker" class="visually-hidden" aria-label="今回集中するタスク"><option value="">タスクを選ばずに始める</option></select>
+          <button id="manage-tasks" class="small-button" type="button">一覧・編集</button>
+        </div>
+        <div id="inline-task-list" class="inline-task-list" aria-label="未完了のToDoリスト"></div>
+        <p id="task-limit-message" class="form-message" aria-live="polite"></p>
+      </section>
 
       <div class="app-card focus-card">
         <div class="mode-section">
@@ -78,6 +97,7 @@
               <button id="mute-button" class="mute-button" type="button" aria-pressed="false" aria-label="サウンドをミュート">◖</button>
               <input type="range" id="volumeControl" min="0" max="1" step="0.01" value="0.35" aria-label="音量">
             </div>
+            <label class="notification-row"><input id="notification-toggle" type="checkbox"> 終了通知を使う <small id="notification-status"></small></label>
           </div>
           <button id="start-button" class="primary-button" type="button">
             <span id="start-icon" aria-hidden="true">▶</span><span id="start-label">集中をはじめる</span>
@@ -96,6 +116,7 @@
           <p class="eyebrow break-eyebrow"><span></span> REFRESH TIME</p>
           <h1 id="break-heading">いい集中でした。<br><em>今は、休む時間。</em></h1>
           <p id="break-message">頭と体をゆるめて、次の自分に余白をつくろう。</p>
+          <div id="break-task" class="break-task" hidden><span>今回やること</span><strong id="break-task-name"></strong><div><button id="complete-current-task" type="button">タスクを完了</button><button id="continue-current-task" type="button">まだ続ける</button></div></div>
           <div class="break-timer-card">
             <div class="break-orbit" aria-hidden="true"><span>☕</span></div>
             <div>
@@ -136,8 +157,25 @@
     </div>
   </div>
 
+  <div id="recovery-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="recovery-title" hidden>
+    <div class="modal-card compact-modal">
+      <p class="eyebrow modal-eyebrow">WELCOME BACK</p><h2 id="recovery-title">タイマーを復元しますか？</h2>
+      <p id="recovery-message"></p>
+      <div id="recovery-actions" class="modal-actions"></div>
+    </div>
+  </div>
+
+  <div id="task-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title" hidden>
+    <div class="modal-card list-modal"><button class="modal-close" data-close="task-modal" type="button" aria-label="閉じる">×</button><h2 id="task-modal-title">タスク一覧</h2><div id="task-list" class="task-list"></div></div>
+  </div>
+
+  <div id="insights-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="insights-title" hidden>
+    <div class="modal-card insights-modal-card"><button class="modal-close" data-close="insights-modal" type="button" aria-label="閉じる">×</button><p class="eyebrow modal-eyebrow">LAST 7 DAYS</p><h2 id="insights-title">7日間の振り返り</h2><div id="insights-content"></div></div>
+  </div>
+
   <script src="recommendation.js"></script>
   <script src="plant-manager.js"></script>
+  <script src="data-manager.js"></script>
   <script src="audio-manager.js"></script>
   <script src="app.js"></script>
 </body>

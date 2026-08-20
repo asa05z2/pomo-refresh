@@ -1,222 +1,59 @@
 "use strict";
-
-const MODES = [
-  { id: "quick", name: "とりあえず3分", detail: "ゲーム感覚でスタート", focus: 3, rest: 1, icon: "⚡" },
-  { id: "short", name: "ショート", detail: "まずは気軽に", focus: 15, rest: 3, icon: "✦" },
-  { id: "classic", name: "クラシック", detail: "王道のリズム", focus: 25, rest: 5, icon: "●" },
-  { id: "long", name: "ロング", detail: "じっくり集中", focus: 50, rest: 10, icon: "◆" },
-  { id: "ultradian", name: "ウルトラディアン", detail: "深いゾーンへ", focus: 90, rest: 20, icon: "☾" }
-];
-
-const SUGGESTIONS = {
-  morning: { label: "朝〜昼のおすすめ", range: "5:00 — 11:59", icon: "☀", items: ["軽く背伸びをして深呼吸しよう","肩を5回大きくまわしてみよう","コップ1杯の水を飲もう","窓を開けて新鮮な空気を取り込もう","その場で10回足踏みしよう","両腕を上げて体の横を伸ばそう","顔を洗って気分を切り替えよう","カーテンを開けて自然の光を浴びよう","手首と足首をゆっくり回そう","好きな音楽を1曲だけ聴こう"] },
-  afternoon: { label: "午後のおすすめ", range: "12:00 — 17:59", icon: "◐", items: ["冷水で手を洗ってこよう","耳を引っ張ってツボを刺激しよう","少し立ち上がって歩き回ろう","遠くの景色を20秒眺めよう","その場で軽くスクワットを5回しよう","首を左右にゆっくり傾けよう","ミント系のガムや飴で気分転換しよう","机の上を1分だけ片づけよう","両手を組んで前にぐっと伸ばそう","窓辺で3回深呼吸しよう"] },
-  night: { label: "夜のおすすめ", range: "18:00 — 4:59", icon: "☾", items: ["目を閉じて温かい手で覆おう","部屋の明かりを少し落とそう","深呼吸をして首をストレッチしよう","画面から目を離して遠くを眺めよう","肩の力を抜いてゆっくり3回呼吸しよう","こめかみをやさしく円を描くようにほぐそう","温かい飲み物をひと口飲もう","手のひらと指をゆっくりほぐそう","背中を丸めてからゆっくり伸ばそう","今日できたことを1つ思い出そう"] }
-};
-
-const FOCUS_SOUNDS = [
-  { id: "focus2", label: "集中BGM", icon: "♫", note: "集中用BGM" },
-  { id: "birdRiver", label: "鳥と川", icon: "♩", note: "鳥と川の環境音" },
-  { id: "rain", label: "雨音", icon: "☂", note: "雨音で静かに集中" },
-  { id: "creek", label: "せせらぎ", icon: "≋", note: "川のせせらぎで穏やかに集中" },
-  { id: "campfire", label: "焚き火", icon: "♨", note: "焚き火の揺らぎで落ち着いて集中" },
-  { id: "cafe", label: "カフェ", icon: "☕", note: "静かなカフェのざわめき" },
-  { id: "ukulele", label: "ウクレレ", icon: "♪", note: "軽やかなウクレレで作業" },
-  { id: "acousticGuitar", label: "ギター", icon: "♬", note: "穏やかなアコースティックギター" }
-];
-const FOCUS_SOUND_IDS = FOCUS_SOUNDS.map((sound) => sound.id);
-
-const $ = (selector) => document.querySelector(selector);
-const plantManager = new PlantManager();
-const audioManager = new AudioManager();
-const storedMode = localStorage.getItem("pomorefresh:lastMode");
-const storedFocusSound = localStorage.getItem("pomorefresh:focusSound");
-let focusSound = FOCUS_SOUND_IDS.includes(storedFocusSound) ? storedFocusSound : "focus2";
-let selectedMode = MODES.some((m) => m.id === storedMode) ? storedMode : "short";
-let phase = "focus";
-let running = false;
-let remaining = mode().focus * 60;
-let totalSeconds = remaining;
-let endAt = null;
-let ticker = null;
-let suggestionIndex = -1;
-let recommendedModeId = null;
-let breakRewarded = false;
-
-const PLANT_STAGES = [
-  { icon: "🌰", name: "種から育てよう" },
-  { icon: "🌱", name: "小さな芽が出た" },
-  { icon: "🌿", name: "葉っぱが育った" },
-  { icon: "🌷", name: "つぼみがついた" },
-  { icon: "🌸", name: "きれいに開花！" }
-];
-
-function mode() { return MODES.find((item) => item.id === selectedMode); }
-function formatTime(seconds) { const safe = Math.max(0, Math.ceil(seconds)); return `${String(Math.floor(safe / 60)).padStart(2,"0")}:${String(safe % 60).padStart(2,"0")}`; }
-function todayKey() { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`; }
-function stats() { try { const data = JSON.parse(localStorage.getItem("pomorefresh:stats")); return data?.date === todayKey() ? data : { date: todayKey(), focus: 0, tired: 0 }; } catch { return { date: todayKey(), focus: 0, tired: 0 }; } }
-function updateStats(type) { const data = stats(); data[type] += 1; localStorage.setItem("pomorefresh:stats", JSON.stringify(data)); renderStats(); }
-function renderStats() { const data = stats(); $("#focus-count").textContent = data.focus; $("#tired-count").textContent = data.tired; }
-function renderPlant() {
-  const state = plantManager.state;
-  const stage = PLANT_STAGES[state.plantStage - 1];
-  const growth = plantManager.growthProgress();
-  const moisture = plantManager.moistureStatus();
-  $("#plant-visual").textContent = stage.icon;
-  $("#plant-title").textContent = stage.name;
-  $("#plant-stage").textContent = `STAGE ${state.plantStage}`;
-  $("#growth-meter").style.width = `${Math.min(100, Math.max(0, growth.value))}%`;
-  $("#growth-value").textContent = growth.next === null ? `${growth.current} pt · MAX` : `${growth.current} / ${growth.next} pt`;
-  $("#moisture-meter").style.width = `${state.moisture}%`;
-  $("#moisture-value").textContent = `${Math.round(state.moisture)}% · ${moisture.label}`;
-  $("#water-points").textContent = state.waterPt;
-  $("#water-plant").disabled = state.waterPt < 1 || state.moisture >= 100;
-}
-
-function sessionHistory() {
-  try {
-    const history = JSON.parse(localStorage.getItem("pomorefresh:sessionHistory"));
-    return Array.isArray(history) ? history : [];
-  } catch { return []; }
-}
-function recordSession(outcome) {
-  const focusedSeconds = Math.max(0, totalSeconds - remaining);
-  const history = sessionHistory();
-  history.push({ modeId: selectedMode, plannedMinutes: mode().focus, focusedSeconds, outcome, endedAt: new Date().toISOString() });
-  localStorage.setItem("pomorefresh:sessionHistory", JSON.stringify(history.slice(-20)));
-}
-function getRecommendation(modeId = selectedMode) {
-  return PomoRecommendation.calculateRecommendation(sessionHistory(), MODES, modeId);
-}
-function renderRecommendation() {
-  const recommendation = getRecommendation();
-  const panel = $("#focus-recommendation");
-  recommendedModeId = recommendation?.mode.id || null;
-  if (!recommendation) { panel.hidden = true; return; }
-  $("#recommendation-title").textContent = `${recommendation.mode.focus}分モードが合いそうです`;
-  $("#recommendation-reason").textContent = `最近は${recommendation.sampleSize}回、${recommendation.typicalMinutes}分ほどで休憩しています。`;
-  $("#apply-recommendation").textContent = `${recommendation.mode.name}に切り替える →`;
-  panel.hidden = false;
-}
-
-function renderModes() {
-  $("#mode-list").innerHTML = MODES.map((item) => `<button class="mode-button ${item.id === selectedMode ? "is-selected" : ""}" data-mode="${item.id}" type="button" role="radio" aria-checked="${item.id === selectedMode}"><span class="mode-icon" aria-hidden="true">${item.icon}</span><span class="mode-copy"><strong>${item.name}</strong><small>休憩 ${item.rest}分 · ${item.detail}</small></span><span class="mode-time">${item.focus}<small>分</small></span></button>`).join("");
-  $("#mode-use").textContent = mode().detail;
-  document.querySelectorAll("[data-mode]").forEach((button) => button.addEventListener("click", () => selectMode(button.dataset.mode)));
-  renderRecommendation();
-  renderSoundControls();
-}
-function selectMode(id) {
-  if (running || phase !== "focus") return;
-  selectedMode = id; localStorage.setItem("pomorefresh:lastMode", id);
-  remaining = mode().focus * 60; totalSeconds = remaining; renderModes(); renderTimer();
-}
-function renderTimer() {
-  const target = phase === "focus" ? $("#focus-timer") : $("#break-timer"); target.textContent = formatTime(remaining);
-  document.title = running ? `${formatTime(remaining)} · ${phase === "focus" ? "集中中" : "休憩中"} | PomoRefresh` : "PomoRefresh — 集中と休憩を、やさしく。";
-  if (phase === "focus") $("#focus-progress").style.width = `${Math.min(100, Math.max(0, (1 - remaining / totalSeconds) * 100))}%`;
-}
-function activeFocusSound() { return selectedMode === "quick" ? "threeMinute" : focusSound; }
-function renderSoundControls() {
-  const activeSound = activeFocusSound();
-  $("#sound-options").innerHTML = FOCUS_SOUNDS.map((sound) => `<button class="sound-option ${sound.id === activeSound ? "is-selected" : ""}" data-sound="${sound.id}" type="button" role="radio" aria-checked="${sound.id === activeSound}" ${selectedMode === "quick" ? "disabled" : ""}><span>${sound.icon}</span> ${sound.label}</button>`).join("");
-  document.querySelectorAll("[data-sound]").forEach((button) => {
-    const selected = button.dataset.sound === activeSound;
-    button.classList.toggle("is-selected", selected);
-    button.setAttribute("aria-checked", String(selected));
-    button.disabled = selectedMode === "quick";
-    button.addEventListener("click", () => selectFocusSound(button.dataset.sound));
-  });
-  const selectedSound = FOCUS_SOUNDS.find((sound) => sound.id === activeSound);
-  $("#sound-note").textContent = selectedMode === "quick"
-    ? "3分専用BGMを自動再生"
-    : selectedSound?.note || "集中用BGM";
-  $("#volumeControl").value = audioManager.volume;
-  $("#mute-button").classList.toggle("is-muted", audioManager.isMuted);
-  $("#mute-button").setAttribute("aria-pressed", String(audioManager.isMuted));
-  $("#mute-button").textContent = audioManager.isMuted ? "×" : "◖";
-  $("#mute-button").setAttribute("aria-label", audioManager.isMuted ? "ミュートを解除" : "サウンドをミュート");
-}
-function selectFocusSound(sound) {
-  if (selectedMode === "quick" || !FOCUS_SOUND_IDS.includes(sound)) return;
-  focusSound = sound; localStorage.setItem("pomorefresh:focusSound", sound); renderSoundControls();
-  if (running && phase === "focus") audioManager.switchSound(activeFocusSound());
-}
-function setRunning(next) {
-  running = next; clearInterval(ticker); ticker = null;
-  if (running) {
-    audioManager.initCompletionAudio(); audioManager.switchSound(activeFocusSound());
-    endAt = Date.now() + remaining * 1000; ticker = setInterval(tick, 250); tick();
-  } else audioManager.stop();
-  $("#start-label").textContent = running ? "一時停止" : (remaining < totalSeconds ? "集中をつづける" : "集中をはじめる");
-  $("#start-icon").textContent = running ? "Ⅱ" : "▶";
-  $("#timer-status").textContent = running ? "集中しています" : (remaining < totalSeconds ? "ひと休み中" : "準備できたらスタート");
-  $("#tired-button").disabled = !(phase === "focus" && running);
-}
-function tick() {
-  remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000)); renderTimer();
-  if (remaining <= 0) finishPhase();
-}
-function toggleFocus() { if (phase !== "focus") return; if (running) { remaining = Math.max(0, Math.ceil((endAt - Date.now()) / 1000)); setRunning(false); renderTimer(); } else setRunning(true); }
-function resetFocus() { if (phase !== "focus") return; setRunning(false); remaining = mode().focus * 60; totalSeconds = remaining; renderTimer(); }
-function finishPhase() {
-  setRunning(false);
-  if (phase === "focus") {
-    plantManager.rewardFocus(totalSeconds / 60); renderPlant();
-    recordSession("completed"); updateStats("focus"); startBreak(false);
-  } else showComplete();
-}
-function startBreak(fromTired) {
-  const outcome = PomoRecommendation.classifySessionOutcome(remaining, totalSeconds, fromTired);
-  if (fromTired) {
-    const focusedMinutes = Math.max(0, totalSeconds - remaining) / 60;
-    if (outcome === "completed") plantManager.rewardFocus(focusedMinutes);
-    plantManager.earnWater(1); renderPlant();
-    recordSession(outcome); updateStats(outcome === "completed" ? "focus" : "tired");
-  }
-  clearInterval(ticker); phase = "break"; remaining = mode().rest * 60; totalSeconds = remaining;
-  breakRewarded = false;
-  $("#break-message").textContent = fromTired && outcome === "completed"
-    ? "ほとんど最後まで集中できました！ ここからは、しっかり休もう。"
-    : fromTired
-      ? "よく限界まで頑張った！ 無理せず休むのが、いちばん効率的です。"
-      : "頭と体をゆるめて、次の自分に余白をつくろう。";
-  $("#focus-view").classList.remove("is-active"); $("#break-view").classList.add("is-active");
-  chooseSuggestion(true); renderTimer(); running = true; audioManager.switchSound("relax"); endAt = Date.now() + remaining * 1000; ticker = setInterval(tick,250); tick(); window.scrollTo({top:0,behavior:"smooth"});
-}
-function timePeriod() { const hour = new Date().getHours(); return hour >= 5 && hour < 12 ? "morning" : hour >= 12 && hour < 18 ? "afternoon" : "night"; }
-function chooseSuggestion(first = false) {
-  const group = SUGGESTIONS[timePeriod()];
-  if (first) suggestionIndex = Math.floor(Math.random() * group.items.length); else suggestionIndex = (suggestionIndex + 1) % group.items.length;
-  $("#time-icon").textContent = group.icon; $("#time-label").textContent = group.label; $("#time-range").textContent = group.range;
-  $("#suggestion-text").textContent = group.items[suggestionIndex]; $("#done-suggestion").classList.remove("is-done"); $("#done-suggestion").innerHTML = "<span>✓</span> できた！";
-}
-function completeSuggestion() { const button = $("#done-suggestion"); button.classList.add("is-done"); button.innerHTML = "<span>✓</span> できました！"; }
-function showComplete() {
-  clearInterval(ticker); running = false;
-  if (phase === "break" && !breakRewarded) {
-    const restedMinutes = Math.floor(Math.max(0, totalSeconds - remaining) / 60);
-    plantManager.earnWater(restedMinutes); breakRewarded = true; renderPlant();
-  }
-  remaining = 0; audioManager.stop(); audioManager.playCompletionSound(); renderTimer();
-  $("#complete-modal").hidden = false; $("#back-home").focus();
-}
-function returnHome() {
-  $("#complete-modal").hidden = true; $("#break-view").classList.remove("is-active"); $("#focus-view").classList.add("is-active");
-  phase = "focus"; remaining = mode().focus * 60; totalSeconds = remaining; setRunning(false); renderModes(); renderTimer(); window.scrollTo({top:0,behavior:"smooth"});
-}
-$("#start-button").addEventListener("click", toggleFocus);
-$("#reset-button").addEventListener("click", resetFocus);
-$("#tired-button").addEventListener("click", () => startBreak(true));
-$("#skip-break").addEventListener("click", showComplete);
-$("#done-suggestion").addEventListener("click", completeSuggestion);
-$("#next-suggestion").addEventListener("click", () => chooseSuggestion(false));
-$("#back-home").addEventListener("click", returnHome);
-$("#apply-recommendation").addEventListener("click", () => { if (recommendedModeId) selectMode(recommendedModeId); });
-$("#volumeControl").addEventListener("input", (event) => audioManager.setVolume(event.target.value));
-$("#mute-button").addEventListener("click", () => { audioManager.setMuted(!audioManager.isMuted); renderSoundControls(); });
-$("#water-plant").addEventListener("click", () => { plantManager.water(); renderPlant(); });
-document.addEventListener("visibilitychange", () => { if (running) tick(); });
-window.addEventListener("pagehide", () => audioManager.stop(0.05));
-
-renderModes(); renderStats(); renderPlant(); renderTimer();
+const MODES=[{id:"quick",name:"とりあえず3分",detail:"ゲーム感覚でスタート",focus:3,rest:1,icon:"⚡"},{id:"short",name:"ショート",detail:"まずは気軽に",focus:15,rest:3,icon:"✦"},{id:"classic",name:"クラシック",detail:"王道のリズム",focus:25,rest:5,icon:"●"},{id:"long",name:"ロング",detail:"じっくり集中",focus:50,rest:10,icon:"◆"},{id:"ultradian",name:"ウルトラディアン",detail:"深いゾーンへ",focus:90,rest:20,icon:"☾"}];
+const SUGGESTIONS={morning:{label:"朝〜昼のおすすめ",range:"5:00 — 11:59",icon:"☀",items:["軽く背伸びをして深呼吸しよう","肩を5回大きくまわしてみよう","コップ1杯の水を飲もう","窓を開けて新鮮な空気を取り込もう","その場で10回足踏みしよう","両腕を上げて体の横を伸ばそう","顔を洗って気分を切り替えよう","カーテンを開けて自然の光を浴びよう","手首と足首をゆっくり回そう","好きな音楽を1曲だけ聴こう"]},afternoon:{label:"午後のおすすめ",range:"12:00 — 17:59",icon:"◐",items:["冷水で手を洗ってこよう","耳を引っ張ってツボを刺激しよう","少し立ち上がって歩き回ろう","遠くの景色を20秒眺めよう","その場で軽くスクワットを5回しよう","首を左右にゆっくり傾けよう","ミント系のガムや飴で気分転換しよう","机の上を1分だけ片づけよう","両手を組んで前にぐっと伸ばそう","窓辺で3回深呼吸しよう"]},night:{label:"夜のおすすめ",range:"18:00 — 4:59",icon:"☾",items:["目を閉じて温かい手で覆おう","部屋の明かりを少し落とそう","深呼吸をして首をストレッチしよう","画面から目を離して遠くを眺めよう","肩の力を抜いてゆっくり3回呼吸しよう","こめかみをやさしく円を描くようにほぐそう","温かい飲み物をひと口飲もう","手のひらと指をゆっくりほぐそう","背中を丸めてからゆっくり伸ばそう","今日できたことを1つ思い出そう"]}};
+const FOCUS_SOUNDS=[{id:"focus2",label:"集中BGM",icon:"♫",note:"集中用BGM"},{id:"birdRiver",label:"鳥と川",icon:"♩",note:"鳥と川の環境音"},{id:"rain",label:"雨音",icon:"☂",note:"雨音で静かに集中"},{id:"creek",label:"せせらぎ",icon:"≋",note:"川のせせらぎで穏やかに集中"},{id:"campfire",label:"焚き火",icon:"♨",note:"焚き火の揺らぎで落ち着いて集中"},{id:"cafe",label:"カフェ",icon:"☕",note:"静かなカフェのざわめき"},{id:"ukulele",label:"ウクレレ",icon:"♪",note:"軽やかなウクレレで作業"},{id:"acousticGuitar",label:"ギター",icon:"♬",note:"穏やかなアコースティックギター"}];
+const PLANT_STAGES=[{icon:"🌰",name:"種から育てよう"},{icon:"🌱",name:"小さな芽が出た"},{icon:"🌿",name:"葉っぱが育った"},{icon:"🌷",name:"つぼみがついた"},{icon:"🌸",name:"きれいに開花！"}],$=(s)=>document.querySelector(s),dataManager=new DataManager(),plantManager=new PlantManager(),audioManager=new AudioManager(),SOUND_IDS=FOCUS_SOUNDS.map(s=>s.id);
+let selectedMode=MODES.some(m=>m.id===localStorage.getItem("pomorefresh:lastMode"))?localStorage.getItem("pomorefresh:lastMode"):"short",focusSound=SOUND_IDS.includes(localStorage.getItem("pomorefresh:focusSound"))?localStorage.getItem("pomorefresh:focusSound"):"focus2",selectedTaskId=localStorage.getItem("pomorefresh:selectedTask")||"",currentTaskSnapshot=null;
+let phase="focus",running=false,remaining=mode().focus*60,totalSeconds=remaining,endAt=null,ticker=null,suggestionIndex=-1,recommendedModeId=null,breakRewarded=false,titleBlinker=null;
+function mode(){return MODES.find(m=>m.id===selectedMode)}
+function fmt(s){s=Math.max(0,Math.ceil(s));return `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`}
+function todayStats(){try{const v=JSON.parse(localStorage.getItem("pomorefresh:stats"));return v?.date===dataManager.localDate()?v:{date:dataManager.localDate(),focus:0,tired:0}}catch{return{date:dataManager.localDate(),focus:0,tired:0}}}
+function updateStats(type){const v=todayStats();v[type]++;localStorage.setItem("pomorefresh:stats",JSON.stringify(v));renderStats()}
+function renderStats(){const v=todayStats();$("#focus-count").textContent=v.focus;$("#tired-count").textContent=v.tired}
+function renderPlant(){const s=plantManager.state,stage=PLANT_STAGES[s.plantStage-1],g=plantManager.growthProgress(),m=plantManager.moistureStatus();$("#plant-visual").textContent=stage.icon;$("#plant-title").textContent=stage.name;$("#plant-stage").textContent=`STAGE ${s.plantStage}`;$("#growth-meter").style.width=`${Math.min(100,Math.max(0,g.value))}%`;$("#growth-value").textContent=g.next===null?`${g.current} pt · MAX`:`${g.current} / ${g.next} pt`;$("#moisture-meter").style.width=`${s.moisture}%`;$("#moisture-value").textContent=`${Math.round(s.moisture)}% · ${m.label}`;$("#water-points").textContent=s.waterPt;$("#water-plant").disabled=s.waterPt<1||s.moisture>=100}
+function recordSession(outcome,focusedSeconds=Math.max(0,totalSeconds-remaining)){return dataManager.recordSession({modeId:selectedMode,plannedMinutes:mode().focus,focusedSeconds,outcome,taskId:currentTaskSnapshot?.id||null,taskName:currentTaskSnapshot?.name||null})}
+function renderRecommendation(){const r=PomoRecommendation.calculateRecommendation(dataManager.history(),MODES,selectedMode),p=$("#focus-recommendation");recommendedModeId=r?.mode.id||null;if(!r){p.hidden=true;return}$("#recommendation-title").textContent=`${r.mode.focus}分モードが合いそうです`;$("#recommendation-reason").textContent=`最近は${r.sampleSize}回、${r.typicalMinutes}分ほどで休憩しています。`;$("#apply-recommendation").textContent=`${r.mode.name}に切り替える →`;p.hidden=false}
+function renderModes(){$("#mode-list").innerHTML=MODES.map(m=>`<button class="mode-button ${m.id===selectedMode?"is-selected":""}" data-mode="${m.id}" type="button" role="radio" aria-checked="${m.id===selectedMode}"><span class="mode-icon" aria-hidden="true">${m.icon}</span><span class="mode-copy"><strong>${m.name}</strong><small>休憩 ${m.rest}分 · ${m.detail}</small></span><span class="mode-time">${m.focus}<small>分</small></span></button>`).join("");$("#mode-use").textContent=mode().detail;document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>selectMode(b.dataset.mode));renderRecommendation();renderSoundControls()}
+function selectMode(id){if(running||phase!=="focus")return;selectedMode=id;localStorage.setItem("pomorefresh:lastMode",id);remaining=mode().focus*60;totalSeconds=remaining;renderModes();renderTimer();saveTimer()}
+function renderTimer(){(phase==="focus"?$("#focus-timer"):$("#break-timer")).textContent=fmt(remaining);if(!titleBlinker)document.title=running?`${fmt(remaining)} · ${phase==="focus"?"集中中":"休憩中"} | PomoRefresh`:"PomoRefresh — 集中と休憩を、やさしく。";if(phase==="focus")$("#focus-progress").style.width=`${Math.min(100,Math.max(0,(1-remaining/totalSeconds)*100))}%`}
+function activeSound(){return selectedMode==="quick"?"threeMinute":focusSound}
+function renderSoundControls(){const active=activeSound();$("#sound-options").innerHTML=FOCUS_SOUNDS.map(s=>`<button class="sound-option ${s.id===active?"is-selected":""}" data-sound="${s.id}" type="button" role="radio" aria-checked="${s.id===active}" ${selectedMode==="quick"?"disabled":""}><span>${s.icon}</span> ${s.label}</button>`).join("");document.querySelectorAll("[data-sound]").forEach(b=>b.onclick=()=>selectSound(b.dataset.sound));const s=FOCUS_SOUNDS.find(x=>x.id===active);$("#sound-note").textContent=selectedMode==="quick"?"3分専用BGMを自動再生":s?.note||"集中用BGM";$("#volumeControl").value=audioManager.volume;$("#mute-button").classList.toggle("is-muted",audioManager.isMuted);$("#mute-button").setAttribute("aria-pressed",audioManager.isMuted);$("#mute-button").textContent=audioManager.isMuted?"×":"◖"}
+function selectSound(id){if(selectedMode==="quick"||!SOUND_IDS.includes(id))return;focusSound=id;localStorage.setItem("pomorefresh:focusSound",id);renderSoundControls();if(running&&phase==="focus")audioManager.switchSound(activeSound())}
+function esc(v){const d=document.createElement("div");d.textContent=v;return d.innerHTML}
+function clearSelected(){selectedTaskId="";localStorage.removeItem("pomorefresh:selectedTask")}
+function selectedTask(){return dataManager.tasks().find(t=>t.id===selectedTaskId&&!t.completed)||null}
+function renderTasks(){const open=dataManager.sortedOpenTasks();if(selectedTaskId&&!open.some(t=>t.id===selectedTaskId))clearSelected();$("#task-picker").innerHTML='<option value="">タスクを選ばずに始める</option>'+open.map(t=>`<option value="${t.id}">[${t.priority}] ${esc(t.name)}</option>`).join("");$("#task-picker").value=selectedTaskId;$("#inline-task-list").innerHTML=open.length?open.map(t=>`<div class="inline-task-item ${t.id===selectedTaskId?"is-selected":""}" data-priority="${t.priority}"><button class="priority-circle" data-complete-task="${t.id}" type="button" aria-label="優先順位${t.priority}のタスクを完了"></button><button class="inline-task-select" data-select-task="${t.id}" type="button" aria-pressed="${t.id===selectedTaskId}"><strong>${esc(t.name)}</strong><small>${t.id===selectedTaskId?"今回やることに選択中":"優先順位 "+t.priority}</small></button></div>`).join(""):'<p class="inline-task-empty">未完了のタスクはありません</p>';document.querySelectorAll("[data-select-task]").forEach(b=>b.onclick=()=>selectTaskForSession(b.dataset.selectTask));document.querySelectorAll("[data-complete-task]").forEach(b=>b.onclick=()=>taskAction("complete",b.dataset.completeTask));const all=dataManager.tasks(),rank={A:0,B:1,C:2},sorted=[...all.filter(t=>!t.completed).sort((a,b)=>rank[a.priority]-rank[b.priority]||new Date(a.createdAt)-new Date(b.createdAt)),...all.filter(t=>t.completed).sort((a,b)=>new Date(b.completedAt)-new Date(a.completedAt))];$("#task-list").innerHTML=sorted.length?sorted.map(t=>`<div class="task-item ${t.completed?"completed":""}" data-priority="${t.priority}"><span class="task-priority">${t.priority}</span><div><strong>${esc(t.name)}</strong><small>${t.completed?"完了済み":"未完了"}</small></div><div class="task-actions"><button data-task-action="${t.completed?"reopen":"complete"}" data-id="${t.id}" type="button">${t.completed?"戻す":"完了"}</button><button data-task-action="edit" data-id="${t.id}" type="button">編集</button><button data-task-action="delete" data-id="${t.id}" type="button">削除</button></div></div>`).join(""):'<p class="empty-insights">タスクはまだありません。</p>';document.querySelectorAll("[data-task-action]").forEach(b=>b.onclick=()=>taskAction(b.dataset.taskAction,b.dataset.id))}
+function selectTaskForSession(id){selectedTaskId=selectedTaskId===id?"":id;if(selectedTaskId)localStorage.setItem("pomorefresh:selectedTask",selectedTaskId);else localStorage.removeItem("pomorefresh:selectedTask");renderTasks();saveTimer()}
+function taskAction(action,id){const t=dataManager.tasks().find(x=>x.id===id);if(!t)return;if(action==="complete"){dataManager.completeTask(id);if(selectedTaskId===id&&!running)clearSelected()}if(action==="reopen")dataManager.reopenTask(id);if(action==="edit"){const name=prompt("タスク名（40文字まで）",t.name);if(name?.trim()){const priority=prompt("優先順位（A / B / C）",t.priority);dataManager.updateTask(id,{name,priority:String(priority||t.priority).toUpperCase()});if(currentTaskSnapshot?.id===id)currentTaskSnapshot={...currentTaskSnapshot,...dataManager.tasks().find(x=>x.id===id)}}}if(action==="delete"&&confirm(`「${t.name}」を削除しますか？`)){dataManager.deleteTask(id);if(selectedTaskId===id)clearSelected()}renderTasks();renderInsights()}
+function saveTimer(){if(phase==="focus"&&!running&&remaining===totalSeconds){dataManager.clearTimer();return}dataManager.saveTimer({phase,running,remaining,totalSeconds,endAt,selectedMode,taskId:selectedTaskId,taskSnapshot:currentTaskSnapshot,breakRewarded})}
+function showPhase(){$("#focus-view").classList.toggle("is-active",phase==="focus");$("#break-view").classList.toggle("is-active",phase==="break");if(phase==="break"){chooseSuggestion(true);renderBreakTask()}}
+function applyTimer(s){selectedMode=MODES.some(m=>m.id===s.selectedMode)?s.selectedMode:selectedMode;phase=s.phase==="break"?"break":"focus";totalSeconds=Math.max(1,Number(s.totalSeconds)||mode().focus*60);remaining=Math.max(0,Number(s.remaining)||0);endAt=Number(s.endAt)||null;breakRewarded=!!s.breakRewarded;currentTaskSnapshot=s.taskSnapshot||null;selectedTaskId=s.taskId||"";if(s.running&&endAt)remaining=Math.max(0,Math.ceil((endAt-Date.now())/1000));showPhase();renderModes();renderTasks();renderTimer();setRunning(!!s.running,true)}
+function recovery(title,message,actions){$("#recovery-title").textContent=title;$("#recovery-message").textContent=message;const box=$("#recovery-actions");box.innerHTML="";actions.forEach((a,i)=>{const b=document.createElement("button");b.type="button";b.textContent=a.label;if(!i)b.className="primary-action";b.onclick=a.run;box.append(b)});$("#recovery-modal").hidden=false;box.querySelector("button")?.focus()}
+function closeRecovery(){$("#recovery-modal").hidden=true}
+function handleRecovery(){const r=dataManager.timerRecovery();if(r.type==="none")return;if(r.type==="expired"){recovery("古いタイマーを整理しました","24時間以上前の未完了セッションは破棄されました。",[{label:"OK",run:closeRecovery}]);return}const s=r.state,label=s.phase==="break"?"休憩":"集中";if(r.type==="recoverable"){recovery(`${label}タイマーを復元しますか？`,s.running?"ページを離れていた間もタイマーは進んでいます。":"一時停止した残り時間から再開できます。",[{label:"復元する",run:()=>{closeRecovery();applyTimer(s)}},{label:"破棄する",run:()=>{dataManager.clearTimer();closeRecovery()}}]);return}if(s.phase==="focus")recovery("集中時間が終了しています","この集中を完了として記録しますか？",[{label:"完了として記録",run:()=>acceptOverdueFocus(s)},{label:"記録しない",run:()=>{dataManager.clearTimer();closeRecovery()}}]);else recovery("休憩時間が終了しています","休憩を完了として記録し、水やりポイントを付与しますか？",[{label:"完了として記録",run:()=>acceptOverdueBreak(s)},{label:"記録しない",run:()=>{dataManager.clearTimer();closeRecovery()}}])}
+function acceptOverdueFocus(s){applyTimer({...s,running:false,remaining:0});plantManager.rewardFocus(totalSeconds/60);recordSession("completed",totalSeconds);updateStats("focus");dataManager.clearTimer();renderPlant();recovery("集中を記録しました","今から休憩を始めますか？",[{label:"休憩を始める",run:()=>{closeRecovery();startBreak(false)}},{label:"ホームへ戻る",run:()=>{closeRecovery();returnHome()}}])}
+function acceptOverdueBreak(s){applyTimer({...s,running:false,remaining:0});if(!breakRewarded){plantManager.earnWater(Math.floor(totalSeconds/60));breakRewarded=true}dataManager.clearTimer();closeRecovery();renderPlant();showComplete()}
+function setRunning(next,recovered=false){running=next;clearInterval(ticker);ticker=null;if(running){audioManager.initCompletionAudio();audioManager.switchSound(phase==="focus"?activeSound():"relax");if(!recovered||!endAt)endAt=Date.now()+remaining*1000;ticker=setInterval(tick,250);tick()}else audioManager.stop();$("#start-label").textContent=running?"一時停止":remaining<totalSeconds?"集中をつづける":"集中をはじめる";$("#start-icon").textContent=running?"Ⅱ":"▶";$("#timer-status").textContent=running?"集中しています":remaining<totalSeconds?"ひと休み中":"準備できたらスタート";$("#tired-button").disabled=!(phase==="focus"&&running);saveTimer()}
+function tick(){remaining=Math.max(0,Math.ceil((endAt-Date.now())/1000));renderTimer();if(remaining<=0)finishPhase()}
+function toggleFocus(){if(phase!=="focus")return;if(running){remaining=Math.max(0,Math.ceil((endAt-Date.now())/1000));setRunning(false);renderTimer()}else{if(remaining===totalSeconds){const t=selectedTask();currentTaskSnapshot=t?{id:t.id,name:t.name,priority:t.priority}:null}setRunning(true)}}
+function resetFocus(){if(phase!=="focus")return;setRunning(false);remaining=mode().focus*60;totalSeconds=remaining;currentTaskSnapshot=null;dataManager.clearTimer();renderTimer()}
+function finishPhase(){setRunning(false);if(phase==="focus"){notifyEnd("focus");plantManager.rewardFocus(totalSeconds/60);recordSession("completed");updateStats("focus");renderPlant();startBreak(false)}else{notifyEnd("break");showComplete()}}
+function startBreak(tired){const outcome=PomoRecommendation.classifySessionOutcome(remaining,totalSeconds,tired);if(tired){const focused=Math.max(0,totalSeconds-remaining);if(outcome==="completed")plantManager.rewardFocus(focused/60);plantManager.earnWater(1);recordSession(outcome,focused);updateStats(outcome==="completed"?"focus":"tired");renderPlant()}clearInterval(ticker);phase="break";remaining=mode().rest*60;totalSeconds=remaining;breakRewarded=false;$("#break-message").textContent=tired?(outcome==="completed"?"ほとんど最後まで集中できました！ ここからは、しっかり休もう。":"よく限界まで頑張った！ 無理せず休むのが、いちばん効率的です。 "):"頭と体をゆるめて、次の自分に余白をつくろう。";showPhase();renderTimer();running=true;audioManager.switchSound("relax");endAt=Date.now()+remaining*1000;ticker=setInterval(tick,250);tick();saveTimer();window.scrollTo({top:0,behavior:"smooth"})}
+function renderBreakTask(){if(!currentTaskSnapshot){$("#break-task").hidden=true;return}$("#break-task").hidden=false;$("#break-task-name").textContent=currentTaskSnapshot.name}
+function finishCurrentTask(){if(currentTaskSnapshot?.id)dataManager.completeTask(currentTaskSnapshot.id);clearSelected();renderTasks();$("#break-task").hidden=true}
+function showComplete(){clearInterval(ticker);running=false;if(phase==="break"&&!breakRewarded){plantManager.earnWater(Math.floor(Math.max(0,totalSeconds-remaining)/60));breakRewarded=true;renderPlant()}remaining=0;dataManager.clearTimer();audioManager.stop();audioManager.playCompletionSound();renderTimer();$("#complete-modal").hidden=false;$("#back-home").focus()}
+function returnHome(){$("#complete-modal").hidden=true;phase="focus";remaining=mode().focus*60;totalSeconds=remaining;currentTaskSnapshot=null;dataManager.clearTimer();showPhase();setRunning(false);renderModes();renderTasks();renderTimer();window.scrollTo({top:0,behavior:"smooth"})}
+function timePeriod(){const h=new Date().getHours();return h>=5&&h<12?"morning":h>=12&&h<18?"afternoon":"night"}
+function chooseSuggestion(first=false){const g=SUGGESTIONS[timePeriod()];suggestionIndex=first?Math.floor(Math.random()*g.items.length):(suggestionIndex+1)%g.items.length;$("#time-icon").textContent=g.icon;$("#time-label").textContent=g.label;$("#time-range").textContent=g.range;$("#suggestion-text").textContent=g.items[suggestionIndex];$("#done-suggestion").classList.remove("is-done");$("#done-suggestion").innerHTML="<span>✓</span> できた！"}
+function notificationEnabled(){return localStorage.getItem("pomorefresh:notifications")==="true"&&"Notification"in window&&Notification.permission==="granted"}
+async function setNotifications(on){if(!on){localStorage.setItem("pomorefresh:notifications","false");renderNotification();return}if(!("Notification"in window)){renderNotification("このブラウザは非対応です");return}const p=Notification.permission==="default"?await Notification.requestPermission():Notification.permission;localStorage.setItem("pomorefresh:notifications",String(p==="granted"));renderNotification(p==="denied"?"ブラウザ設定で拒否されています":"")}
+function renderNotification(msg=""){$("#notification-toggle").checked=notificationEnabled();$("#notification-status").textContent=msg||(notificationEnabled()?"オン":"オフ")}
+function notifyEnd(kind){const task=currentTaskSnapshot?.name?`「${currentTaskSnapshot.name}」`:"",title=kind==="focus"?"集中時間が終わりました":"休憩時間が終わりました",body=kind==="focus"?`${task}おつかれさまでした。休憩しましょう。`:"次の集中を、自分のペースで始めましょう。";if(notificationEnabled())try{new Notification(title,{body,tag:`pomorefresh-${kind}`})}catch{}startTitleBlink(title)}
+function startTitleBlink(msg){stopTitleBlink();let on=false;titleBlinker=setInterval(()=>{document.title=on?msg:"● PomoRefresh";on=!on},700)}
+function stopTitleBlink(){if(titleBlinker)clearInterval(titleBlinker);titleBlinker=null;renderTimer()}
+function renderInsights(){const days=dataManager.lastSevenDays(),seconds=days.reduce((n,d)=>n+d.focusSeconds,0),tasks=days.reduce((n,d)=>n+d.completedTasks,0),max=Math.max(...days.map(d=>d.focusSeconds),1),c=$("#insights-content");if(!seconds&&!tasks){c.innerHTML='<div class="empty-insights"><p>まだ記録がありません。小さな一歩から始めてみませんか？</p><button id="start-quick" type="button">まず3分から始める</button></div>';$("#start-quick").onclick=()=>{selectMode("quick");$("#insights-modal").hidden=true};return}const labels=["日","月","火","水","木","金","土"];c.innerHTML=`<div class="insight-summary"><div class="insight-stat"><span>集中した合計時間</span><strong>${Math.round(seconds/60)}分</strong></div><div class="insight-stat"><span>できたタスク</span><strong>${tasks}件</strong></div></div><div class="bar-chart" aria-label="直近7日間の日別集中時間">${days.map(d=>{const min=Math.round(d.focusSeconds/60),day=labels[new Date(`${d.date}T12:00:00`).getDay()];return `<div class="bar-column"><span class="bar-value">${min}分</span><i class="bar" style="height:${Math.max(2,d.focusSeconds/max*100)}%"></i><span class="bar-label">${day}</span></div>`}).join("")}</div>`}
+$("#task-form").onsubmit=e=>{e.preventDefault();const t=dataManager.addTask($("#task-name").value,$("#task-priority").value);if(!t){$("#task-limit-message").textContent="タスク名を入力してください（未完了は最大100件）。";return}$("#task-name").value="";$("#task-form").hidden=true;selectedTaskId=t.id;localStorage.setItem("pomorefresh:selectedTask",t.id);$("#task-limit-message").textContent="";renderTasks()};
+$("#toggle-task-form").onclick=()=>{$("#task-form").hidden=!$("#task-form").hidden;if(!$("#task-form").hidden)$("#task-name").focus()};$("#task-picker").onchange=e=>{selectedTaskId=e.target.value;selectedTaskId?localStorage.setItem("pomorefresh:selectedTask",selectedTaskId):localStorage.removeItem("pomorefresh:selectedTask");renderTasks();saveTimer()};$("#manage-tasks").onclick=()=>{renderTasks();$("#task-modal").hidden=false};$("#open-insights").onclick=()=>{renderInsights();$("#insights-modal").hidden=false};document.querySelectorAll("[data-close]").forEach(b=>b.onclick=()=>{$(`#${b.dataset.close}`).hidden=true});
+$("#start-button").onclick=toggleFocus;$("#reset-button").onclick=resetFocus;$("#tired-button").onclick=()=>startBreak(true);$("#skip-break").onclick=showComplete;$("#done-suggestion").onclick=()=>{$("#done-suggestion").classList.add("is-done");$("#done-suggestion").innerHTML="<span>✓</span> できました！"};$("#next-suggestion").onclick=()=>chooseSuggestion(false);$("#back-home").onclick=returnHome;$("#apply-recommendation").onclick=()=>recommendedModeId&&selectMode(recommendedModeId);$("#volumeControl").oninput=e=>audioManager.setVolume(e.target.value);$("#mute-button").onclick=()=>{audioManager.setMuted(!audioManager.isMuted);renderSoundControls()};$("#water-plant").onclick=()=>{plantManager.water();renderPlant()};$("#notification-toggle").onchange=e=>setNotifications(e.target.checked);$("#complete-current-task").onclick=finishCurrentTask;$("#continue-current-task").onclick=()=>{$("#break-task").hidden=true};
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")stopTitleBlink();if(running)tick()});window.addEventListener("focus",stopTitleBlink);window.addEventListener("pagehide",()=>{saveTimer();audioManager.stop(.05)});document.addEventListener("keydown",e=>{if(e.key==="Escape")document.querySelectorAll(".modal:not([hidden])").forEach(m=>{if(m.id!=="recovery-modal")m.hidden=true})});$(".brand").onclick=e=>e.preventDefault();
+renderModes();renderStats();renderPlant();renderTasks();renderNotification();renderTimer();handleRecovery();
