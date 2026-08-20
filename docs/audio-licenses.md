@@ -8,7 +8,7 @@ PomoRefreshへ追加したフリー音源の配布元とライセンスを記録
 | 集中BGM | `focus2.mp3` | Chills / Holizna | [OpenGameArt](https://opengameart.org/content/chills) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | 鳥と川 | `bird_river.mp3` | river_birds.wav / DarkShroom | [Freesound](https://freesound.org/people/DarkShroom/sounds/645326/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | 雨音 | `rain.mp3` | rain and drips / hoshisato | [Freesound](https://freesound.org/people/hoshisato/sounds/853565/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
-| 休憩BGM | `relax.mp3` | Calm Loop / wipics | [OpenGameArt](https://opengameart.org/content/calm-loop) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
+| 休憩BGM | `relax.mp3` | MainMenu Music（dream） / jkjkke | [OpenGameArt](https://opengameart.org/content/mainmenu-music) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | せせらぎ | `creek.mp3` | Creek 06 (loop) / VKProduktion | [Freesound](https://freesound.org/people/VKProduktion/sounds/231536/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | 焚き火 | `campfire.mp3` | Campfire Close Crackling Sticks / FunWithSound | [Freesound](https://freesound.org/people/FunWithSound/sounds/588401/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
 | カフェ | `cafe.mp3` | 0105coffeehouse.wav / moxobna | [Freesound](https://freesound.org/people/moxobna/sounds/46310/) | [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/) |
