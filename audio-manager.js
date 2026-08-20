@@ -8,15 +8,19 @@ class AudioManager {
       acousticGuitar: "acoustic_guitar.mp3", relax: "relax.mp3"
     };
     this.trackVolume = { threeMinute: 0.6 };
+    this.masterBoost = 2;
+    this.trackBoost = { birdRiver: 1.25, campfire: 1.25 };
     this.currentAudio = null;
     this.currentTrack = null;
     this.loopTimer = null;
     this.loopOverlap = 0.6;
     this.activeAudios = new Set();
     this.completionCtx = null;
+    this.audioNodes = new Map();
     this.fadeTimers = new Set();
     this.isPlaying = false;
-    this.volume = this.readNumber("pomorefresh:volume", 0.35);
+    this.volume = this.readNumber("pomorefresh:volume", 0.18);
+    this.migrateVolumeRange();
     this.isMuted = localStorage.getItem("pomorefresh:muted") === "true";
   }
 
@@ -27,12 +31,40 @@ class AudioManager {
     return Number.isFinite(value) && value >= 0 && value <= 1 ? value : fallback;
   }
 
+  migrateVolumeRange() {
+    const key = "pomorefresh:volumeRangeV2";
+    if (localStorage.getItem(key) === "true") return;
+    if (localStorage.getItem("pomorefresh:volume") !== null) {
+      this.volume = this.clampVolume(this.volume / 2);
+      localStorage.setItem("pomorefresh:volume", String(this.volume));
+    }
+    localStorage.setItem(key, "true");
+  }
+
   createAudio(track) {
     if (!this.tracks[track]) return null;
     const audio = new Audio(this.tracks[track]);
     audio.loop = false; audio.preload = "auto"; audio.muted = this.isMuted; audio.volume = 0;
+    this.connectBoost(audio, track);
     this.activeAudios.add(audio);
     return audio;
+  }
+
+  connectBoost(audio, track) {
+    if (!this.initCompletionAudio() || typeof this.completionCtx.createMediaElementSource !== "function") return;
+    try {
+      const source = this.completionCtx.createMediaElementSource(audio);
+      const gain = this.completionCtx.createGain();
+      const compressor = this.completionCtx.createDynamicsCompressor();
+      gain.gain.value = this.masterBoost * (this.trackBoost[track] || 1);
+      compressor.threshold.value = -12;
+      compressor.knee.value = 18;
+      compressor.ratio.value = 6;
+      compressor.attack.value = 0.01;
+      compressor.release.value = 0.2;
+      source.connect(gain).connect(compressor).connect(this.completionCtx.destination);
+      this.audioNodes.set(audio, { source, gain, compressor });
+    } catch { /* HTMLAudioElementの通常音量へフォールバック */ }
   }
 
   switchSound(track, duration = 1.4) {
@@ -100,6 +132,8 @@ class AudioManager {
   targetVolume(track = this.currentTrack) { return this.clampVolume(this.volume * (this.trackVolume[track] || 1)); }
 
   disposeAudio(audio) {
+    const nodes = this.audioNodes.get(audio);
+    if (nodes) { nodes.source.disconnect(); nodes.gain.disconnect(); nodes.compressor.disconnect(); this.audioNodes.delete(audio); }
     audio.pause(); audio.removeAttribute("src"); audio.load(); this.activeAudios.delete(audio);
   }
 

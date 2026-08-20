@@ -34,10 +34,12 @@ class AudioNodeMock {
 }
 
 class AudioContextMock {
-  constructor() { this.state = "suspended"; this.currentTime = 1; this.destination = new AudioNodeMock(); this.oscillators = []; }
+  constructor() { this.state = "suspended"; this.currentTime = 1; this.destination = new AudioNodeMock(); this.oscillators = []; this.gains = []; }
   resume() { this.state = "running"; return Promise.resolve(); }
   createOscillator() { const node = new AudioNodeMock(); this.oscillators.push(node); return node; }
-  createGain() { return new AudioNodeMock(); }
+  createGain() { const node = new AudioNodeMock(); this.gains.push(node); return node; }
+  createMediaElementSource() { return new AudioNodeMock(); }
+  createDynamicsCompressor() { const node = new AudioNodeMock(); node.threshold = new AudioParamMock(); node.knee = new AudioParamMock(); node.ratio = new AudioParamMock(); node.attack = new AudioParamMock(); node.release = new AudioParamMock(); return node; }
 }
 
 function installBrowserMocks(values = {}) {
@@ -69,11 +71,19 @@ test("集中・休憩用のMP3をトラックへ割り当てる", () => {
   });
 });
 
-test("未設定時は音量35%・ミュート解除を使用する", () => {
+test("未設定時は新しい音量幅の18%・ミュート解除を使用する", () => {
   installBrowserMocks();
   const manager = new AudioManager();
-  assert.equal(manager.volume, 0.35);
+  assert.equal(manager.volume, 0.18);
   assert.equal(manager.isMuted, false);
+});
+
+test("保存済み音量を半分へ移行し、従来の最大を新しい中央へ合わせる", () => {
+  const storage = installBrowserMocks({ "pomorefresh:volume": "1" });
+  const manager = new AudioManager();
+  assert.equal(manager.volume, 0.5);
+  assert.equal(storage.get("pomorefresh:volume"), "0.5");
+  assert.equal(storage.get("pomorefresh:volumeRangeV2"), "true");
 });
 
 test("MP3をシームレスループ用の単発プレイヤーで再生する", () => {
@@ -84,7 +94,7 @@ test("MP3をシームレスループ用の単発プレイヤーで再生する",
   assert.equal(manager.currentAudio.loop, false);
   assert.equal(manager.currentAudio.preload, "auto");
   assert.equal(manager.currentAudio.paused, false);
-  assert.equal(manager.currentAudio.volume, 0.21);
+  assert.equal(manager.currentAudio.volume, 0.108);
   manager.stop(0);
 });
 
@@ -121,6 +131,20 @@ test("再生中の音量変更にも3分音源の補正を適用する", () => {
   manager.switchSound("threeMinute", 0);
   manager.setVolume(0.8);
   assert.equal(manager.currentAudio.volume, 0.48);
+  manager.stop(0);
+});
+
+test("音量50%を従来の最大相当にし、鳥と川・焚き火を追加で増幅する", () => {
+  installBrowserMocks();
+  const manager = new AudioManager();
+  manager.switchSound("focus2", 0);
+  assert.equal(manager.audioNodes.get(manager.currentAudio).gain.gain.value, 2);
+  manager.stop(0);
+  manager.switchSound("birdRiver", 0);
+  assert.equal(manager.audioNodes.get(manager.currentAudio).gain.gain.value, 2.5);
+  manager.stop(0);
+  manager.switchSound("campfire", 0);
+  assert.equal(manager.audioNodes.get(manager.currentAudio).gain.gain.value, 2.5);
   manager.stop(0);
 });
 
